@@ -43,7 +43,16 @@ public class Query {
 					"m.id = c.mid " + 
 					"and c.pid = a.id ";
 	private PreparedStatement getActorsForMovies;
-
+	
+	private static final String RENTED_SQL = "SELECT CASE " +
+					"WHEN cid = ? " +
+					"THEN 'YOU HAVE IT' " +
+					"ELSE 'UNAVAILABLE' " +
+					"END " +
+					"FROM Rental " +
+					"WHERE mid = ? and status = 'open'";
+	private PreparedStatement alreadyRented;
+	
 	/* uncomment, and edit, after your create your own customer database */
 	
 	private static final String CUSTOMER_LOGIN_SQL = 
@@ -123,6 +132,7 @@ public class Query {
 
 		directorMidStatement = conn.prepareStatement(DIRECTOR_MID_SQL);
 		getActorsForMovies = conn.prepareStatement(GET_ACTORS_SQL);
+		alreadyRented = customerConn.prepareStatement(RENTED_SQL);
 
 		/* uncomment after you create your customers database */
 		
@@ -220,14 +230,23 @@ public class Query {
 				System.out.println("\t\tDirector: " + director_set.getString(3)
 						+ "," + director_set.getString(2));
 			}
+			director_set.close();
 			getActorsForMovies.clearParameters();
 			getActorsForMovies.setString(1, movie_set.getString(2));
 			ResultSet actor_set = getActorsForMovies.executeQuery();
 			while(actor_set.next()){
 				System.out.println("\t\tActor: " + actor_set.getString(2) + ", " + actor_set.getString(1));
 			}
-			director_set.close();
-			/* now you need to retrieve the actors, in the same manner */
+			actor_set.close();
+			alreadyRented.clearParameters();
+			alreadyRented.setInt(1, cid);
+			alreadyRented.setInt(2, mid);
+			ResultSet rented_set = alreadyRented.executeQuery();
+			if(rented_set.next()){
+				System.out.println("\t\tStatus: " + rented_set.getString(1));
+			}else{
+				System.out.println("\t\tStatus: Available");
+			}
 			/* then you have to find the status: of "AVAILABLE" "YOU HAVE IT", "UNAVAILABLE" */
 		}
 		movie_set.close();
