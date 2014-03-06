@@ -17,6 +17,7 @@ public class Query {
 	private String jSQLDriver;
 	private String jSQLUrl;
 	private String jSQLUser;
+	private String jSQLCustomer;
 	private String jSQLPassword;
 
 	// DB Connection
@@ -35,14 +36,21 @@ public class Query {
 					 + "FROM movie_directors x, directors y "
 					 + "WHERE x.mid = ? and x.did = y.id";
 	private PreparedStatement directorMidStatement;
+	
+	private static final String GET_ACTORS_SQL = "SELECT a.fname, a.lname FROM " +
+					"movie m, casts c, actor a " + 
+					"WHERE m.name = ? and " +
+					"m.id = c.mid " + 
+					"and c.pid = a.id ";
+	private PreparedStatement getActorsForMovies;
 
 	/* uncomment, and edit, after your create your own customer database */
-	/*
+	
 	private static final String CUSTOMER_LOGIN_SQL = 
 		"SELECT * FROM customer WHERE login = ? and password = ?";
 	private PreparedStatement customerLoginStatement;
 
-	private static final String BEGIN_TRANSACTION_SQL = 
+	/*private static final String BEGIN_TRANSACTION_SQL = 
 		"SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; BEGIN TRANSACTION;";
 	private PreparedStatement beginTransactionStatement;
 
@@ -69,6 +77,7 @@ public class Query {
 
 		jSQLDriver   = configProps.getProperty("videostore.jdbc_driver");
 		jSQLUrl	   = configProps.getProperty("videostore.imdb_url");
+		jSQLCustomer = configProps.getProperty("videostore.customer_url");				
 		jSQLUser	   = configProps.getProperty("videostore.sqlazure_username");
 		jSQLPassword = configProps.getProperty("videostore.sqlazure_password");
 
@@ -95,6 +104,8 @@ public class Query {
 		   customerConn.setAutoCommit(true); //by default automatically commit after each statement
 		   customerConn.setTransactionIsolation(...); //
 		*/
+		customerConn = DriverManager.getConnection(jSQLCustomer, jSQLUser, jSQLPassword);
+		customerConn.setAutoCommit(true);
 	        
 	}
 
@@ -111,11 +122,12 @@ public class Query {
 	public void prepareStatements() throws Exception {
 
 		directorMidStatement = conn.prepareStatement(DIRECTOR_MID_SQL);
+		getActorsForMovies = conn.prepareStatement(GET_ACTORS_SQL);
 
 		/* uncomment after you create your customers database */
-		/*
+		
 		customerLoginStatement = customerConn.prepareStatement(CUSTOMER_LOGIN_SQL);
-		beginTransactionStatement = customerConn.prepareStatement(BEGIN_TRANSACTION_SQL);
+		/*beginTransactionStatement = customerConn.prepareStatement(BEGIN_TRANSACTION_SQL);
 		commitTransactionStatement = customerConn.prepareStatement(COMMIT_SQL);
 		rollbackTransactionStatement = customerConn.prepareStatement(ROLLBACK_SQL);
 		*/
@@ -163,7 +175,7 @@ public class Query {
 		/* authenticates the user, and returns the user id, or -1 if authentication fails */
 
 		/* Uncomment after you create your own customers database */
-		/*
+		
 		int cid;
 
 		customerLoginStatement.clearParameters();
@@ -174,8 +186,6 @@ public class Query {
 		else cid = -1;
 		cid_set.close();
 		return(cid);
-		 */
-		return (55);
 	}
 
 	public void transaction_printPersonalData(int cid) throws Exception {
@@ -208,7 +218,13 @@ public class Query {
 			ResultSet director_set = directorMidStatement.executeQuery();
 			while (director_set.next()) {
 				System.out.println("\t\tDirector: " + director_set.getString(3)
-						+ " " + director_set.getString(2));
+						+ "," + director_set.getString(2));
+			}
+			getActorsForMovies.clearParameters();
+			getActorsForMovies.setString(1, movie_set.getString(2));
+			ResultSet actor_set = getActorsForMovies.executeQuery();
+			while(actor_set.next()){
+				System.out.println("\t\tActor: " + actor_set.getString(2) + ", " + actor_set.getString(1));
 			}
 			director_set.close();
 			/* now you need to retrieve the actors, in the same manner */
