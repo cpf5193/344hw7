@@ -1,8 +1,9 @@
-import java.util.Properties;
+import java.util.*;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 
 import java.io.FileInputStream;
@@ -37,12 +38,26 @@ public class Query {
 					 + "WHERE x.mid = ? and x.did = y.id";
 	private PreparedStatement directorMidStatement;
 	
-	private static final String GET_ACTORS_SQL = "SELECT a.fname, a.lname FROM " +
+	private static final String FAST_ACTORS_BEGIN = "SELECT m.id, a.fname, a.lname FROM " +
+		"movie m, casts c, actor a " +
+		"WHERE m.name like '%";
+	private static final String FAST_ACTORS_END = "%' " +
+		"and m.id = c.mid and c.pid = a.id " +
+		"order by m.id";
+	
+	private static final String GET_ACTORS_SQL = "SELECT m.id, a.fname, a.lname FROM " +
 					"movie m, casts c, actor a " + 
 					"WHERE m.name = ? and " +
 					"m.id = c.mid " + 
 					"and c.pid = a.id ";
 	private PreparedStatement getActorsForMovies;
+	
+	private static final String FAST_DIRECTORS_BEGIN = "SELECT m.id, d.fname, d.lname FROM " +
+		"movie m, movie_directors md, directors d " +
+		"WHERE m.name like '%";
+	private static final String FAST_DIRECTORS_END = "%' " +
+		"and m.id = md.mid and md.did = d.id " +
+		"order by m.id";
 	
 	private static final String RENTED_SQL = "SELECT CASE " +
 					"WHEN cid = ? " +
@@ -52,6 +67,16 @@ public class Query {
 					"FROM Rental " +
 					"WHERE mid = ? and status = 'open'";
 	private PreparedStatement alreadyRented;
+	
+	private static final String CUST_INFO_SQL = 
+			"select fname, maxnum, maxnum - r.checkedOut as remaining " +
+			"from customer c, subscription s, " +
+			  "(select count(*) as checkedOut from Rental " +
+			  "where status = 'open' " +
+			  "and cid = ?) as r " +
+			"where  c.cid = s.cid " +
+			"and c.cid = ?";
+	private PreparedStatement customerInfo;
 	
 	/* uncomment, and edit, after your create your own customer database */
 	
@@ -133,6 +158,7 @@ public class Query {
 		directorMidStatement = conn.prepareStatement(DIRECTOR_MID_SQL);
 		getActorsForMovies = conn.prepareStatement(GET_ACTORS_SQL);
 		alreadyRented = customerConn.prepareStatement(RENTED_SQL);
+		customerInfo = customerConn.prepareStatement(CUST_INFO_SQL);
 
 		/* uncomment after you create your customers database */
 		
@@ -200,6 +226,13 @@ public class Query {
 
 	public void transaction_printPersonalData(int cid) throws Exception {
 		/* println the customer's personal data: name, and plan number */
+		customerInfo.clearParameters();
+		customerInfo.setInt(1, cid); 
+		customerInfo.setInt(2, cid);
+		ResultSet cust_info_set = customerInfo.executeQuery();
+		cust_info_set.next();
+		System.out.println("Hello, " + cust_info_set.getString(1) + 
+				"! You have " + cust_info_set.getInt(3) + " out of " + cust_info_set.getInt(2) + " rentals remaining.");
 	}
 
 
@@ -247,7 +280,7 @@ public class Query {
 			}else{
 				System.out.println("\t\tStatus: Available");
 			}
-			/* then you have to find the status: of "AVAILABLE" "YOU HAVE IT", "UNAVAILABLE" */
+			rented_set.close();
 		}
 		movie_set.close();
 		System.out.println();
@@ -277,8 +310,50 @@ public class Query {
 		   Needs to run three SQL queries: (a) movies, (b) movies join directors, (c) movies join actors
 		   Answers are sorted by mid.
 		   Then merge-joins the three answer sets */
+		String searchSql = SEARCH_SQL_BEGIN + movie_title + SEARCH_SQL_END;
+		String fastActorSql = FAST_ACTORS_BEGIN + movie_title + FAST_ACTORS_END; 
+		String fastDirectorSql = FAST_DIRECTORS_BEGIN + movie_title + FAST_DIRECTORS_END;
+		
+		Statement searchStatement = conn.createStatement();
+		Statement actorStatement = conn.createStatement();
+		Statement directorStatement = conn.createStatement();
+		
+		ResultSet movie_set = searchStatement.executeQuery(searchSql);
+		ResultSet director_set = directorStatement.executeQuery(fastDirectorSql);
+		ResultSet actor_set = actorStatement.executeQuery(fastActorSql);
+		
+		Map<Integer, ArrayList<String>> strings = new TreeMap<Integer, ArrayList<String>>();
+		
+		while(movie_set.next()){
+			int mid = movie_set.getInt(1);
+			strings.put(mid, new ArrayList<String>(Arrays.asList(
+					"ID: " + mid + " NAME: "
+					+ movie_set.getString(2) + " YEAR: "
+					+ movie_set.getString(3))));
+		}
+		while(director_set.next()){
+			int mid = director_set.getInt(1);
+			ArrayList<String> temp = strings.get(mid);
+			temp.add("\t\tDirector: " + director_set.getString(3) + ", " + director_set.getString(2));
+			strings.put(mid, temp);
+		}
+		while(actor_set.next()){
+			int mid = actor_set.getInt(1);
+			ArrayList<String> temp = strings.get(mid);
+			temp.add("\t\tActor: " + actor_set.getString(3) + ", " + actor_set.getString(2));
+			strings.put(mid, temp);
+		}
+		for(int i : strings.keySet()){
+			ArrayList<String> toPrint = strings.get(i);
+			for(String j : toPrint){
+				System.out.println(j);
+			}
+		}
+		movie_set.close();
+		director_set.close();
+		actor_set.close();
 	}
-
+	
 
     /* Uncomment helpers below once you've got beginTransactionStatement,
        commitTransactionStatement, and rollbackTransactionStatement setup from
