@@ -81,13 +81,22 @@ public class Query {
 	private static final String ALL_PLANS_SQL = "select * from Subscription";
 	private static final String SUB_IDS_SQL = "select sid from Subscription";
 	
+	private static final String UPDATE_SID_SQL = "UPDATE Customer SET sid = ? WHERE cid = ?";
+	private PreparedStatement updateSid;
+	
+	private static final String CURRENT_RENTALS_SQL = "select count(*) from Rental where status = 'open' and cid=?";
+	private PreparedStatement numRentals;
+	
+	private static final String MAX_RENTALS_SQL = "select maxnum from Subscription where sid = ?";
+	private PreparedStatement maxRentals;
+	
 	/* uncomment, and edit, after your create your own customer database */
 	
 	private static final String CUSTOMER_LOGIN_SQL = 
 		"SELECT * FROM customer WHERE login = ? and password = ?";
 	private PreparedStatement customerLoginStatement;
 
-	/*private static final String BEGIN_TRANSACTION_SQL = 
+	private static final String BEGIN_TRANSACTION_SQL = 
 		"SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; BEGIN TRANSACTION;";
 	private PreparedStatement beginTransactionStatement;
 
@@ -96,7 +105,7 @@ public class Query {
 
 	private static final String ROLLBACK_SQL = "ROLLBACK TRANSACTION";
 	private PreparedStatement rollbackTransactionStatement;
-	*/
+	
 	
 
 	public Query(String configFilename) {
@@ -162,14 +171,17 @@ public class Query {
 		getActorsForMovies = conn.prepareStatement(GET_ACTORS_SQL);
 		alreadyRented = customerConn.prepareStatement(RENTED_SQL);
 		customerInfo = customerConn.prepareStatement(CUST_INFO_SQL);
+		updateSid = customerConn.prepareStatement(UPDATE_SID_SQL);
+		numRentals = customerConn.prepareStatement(CURRENT_RENTALS_SQL);
+		maxRentals = customerConn.prepareStatement(MAX_RENTALS_SQL);
 
 		/* uncomment after you create your customers database */
 		
 		customerLoginStatement = customerConn.prepareStatement(CUSTOMER_LOGIN_SQL);
-		/*beginTransactionStatement = customerConn.prepareStatement(BEGIN_TRANSACTION_SQL);
+		beginTransactionStatement = customerConn.prepareStatement(BEGIN_TRANSACTION_SQL);
 		commitTransactionStatement = customerConn.prepareStatement(COMMIT_SQL);
 		rollbackTransactionStatement = customerConn.prepareStatement(ROLLBACK_SQL);
-		*/
+		
 
 		/* add here more prepare statements for all the other queries you need */
 		/* . . . . . . */
@@ -298,6 +310,30 @@ public class Query {
 	public void transaction_choosePlan(int cid, int pid) throws Exception {
 	    /* updates the customer's plan to pid: UPDATE customer SET plid = pid */
 	    /* remember to enforce consistency ! */
+		beginTransaction();
+		updateSid.clearParameters();
+		updateSid.setInt(1, pid);
+		updateSid.setInt(2, cid);
+		updateSid.execute();
+		numRentals.clearParameters();
+		numRentals.setInt(1, cid);
+		ResultSet num = numRentals.executeQuery();
+		maxRentals.clearParameters();
+		maxRentals.setInt(1, pid);
+		ResultSet max = maxRentals.executeQuery();
+		num.next();
+		max.next();
+		int maxMovs = max.getInt(1);
+		int numMovs = num.getInt(1);
+		String movs = " Movie";
+		if(numMovs - maxMovs != 1)
+			movs += "s";
+		if(numMovs > maxMovs){
+			rollbackTransaction();
+			System.out.println("Sorry, you must return " + (numMovs - maxMovs) + movs + " before switching to this plan.");
+		} else{
+			commitTransaction();
+		}
 	}
 
 	public void transaction_listPlans() throws Exception {
@@ -372,7 +408,7 @@ public class Query {
 
     /* Uncomment helpers below once you've got beginTransactionStatement,
        commitTransactionStatement, and rollbackTransactionStatement setup from
-       prepareStatements():
+       prepareStatements():*/
     
        public void beginTransaction() throws Exception {
 	    customerConn.setAutoCommit(false);
@@ -387,6 +423,6 @@ public class Query {
 	    rollbackTransactionStatement.executeUpdate();
 	    customerConn.setAutoCommit(true);
 	    } 
-    */
+    
 
 }
