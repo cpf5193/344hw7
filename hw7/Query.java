@@ -95,8 +95,11 @@ public class Query {
 	private static final String NEW_RENTAL_SQL = "INSERT into Rental values(?, ?, 'open', GETDATE())";
 	private PreparedStatement newTuple;
 	
-	private static final String RENTER_ID_SQL = "select cid from Rental where mid = ?";
+	private static final String RENTER_ID_SQL = "select cid from Rental where mid = ? and status = 'open'";
 	private PreparedStatement renterId;
+	
+	private static final String SUB_ID_SQL = "select sid from customer where cid = ?";
+	private PreparedStatement subIdFromCid;
 	
 	/* uncomment, and edit, after your create your own customer database */
 	
@@ -184,6 +187,7 @@ public class Query {
 		maxRentals = customerConn.prepareStatement(MAX_RENTALS_SQL);
 		newTuple = customerConn.prepareStatement(NEW_RENTAL_SQL);
 		renterId = customerConn.prepareStatement(RENTER_ID_SQL);
+		subIdFromCid = customerConn.prepareStatement(SUB_ID_SQL);
 
 		/* uncomment after you create your customers database */
 		
@@ -247,8 +251,9 @@ public class Query {
 		renterId.setInt(1, mid);
 		ResultSet result = renterId.executeQuery();
 		if(result.next()){
+			int resultNum = result.getInt(1);
 			result.close();
-			return result.getInt(1);
+			return resultNum;
 		}
 		else{ 
 			result.close();
@@ -384,13 +389,28 @@ public class Query {
 	    /* rent the movie mid to the customer cid */
 	    /* remember to enforce consistency ! */
 		beginTransaction();
+		subIdFromCid.clearParameters();
+		subIdFromCid.setInt(1, cid);
+		ResultSet subIdSet = subIdFromCid.executeQuery();
+		subIdSet.next();
+		int subId = subIdSet.getInt(1);
 		int renterId = getRenterID(mid);
-		if(renterId == cid){
+		numRentals.clearParameters();
+		numRentals.setInt(1, cid);
+		ResultSet num = numRentals.executeQuery();
+		maxRentals.clearParameters();
+		maxRentals.setInt(1, subId);
+		ResultSet max = maxRentals.executeQuery();
+		if(num.next() && max.next() && num.getInt(1) == max.getInt(1)){
+			rollbackTransaction();
+			System.out.println("Sorry, you are currently renting your max number of movies.");
+		}
+		else if(renterId == cid){
 			rollbackTransaction();
 			System.out.println("You are already renting this movie.");
 		} else if(renterId != -1){
-			rollbackTransaction();
 			System.out.println("Sorry, this movie has been rented by another person.");
+			rollbackTransaction();	
 		} else if(isValidMovie(mid)){
 			newTuple.clearParameters();
 			newTuple.setInt(1, mid);
