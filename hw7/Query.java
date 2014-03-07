@@ -92,7 +92,7 @@ public class Query {
 	
 	private static final String ALL_RENTALS_SQL = "select id from Movie";
 	
-	private static final String NEW_RENTAL_SQL = "INSERT into Rental values(?, ?, 'open', GETDATE())";
+	private static final String NEW_RENTAL_SQL = "INSERT into Rental values(?, ?, 'open', SYSDATETIMEOFFSET())";
 	private PreparedStatement newTuple;
 	
 	private static final String RENTER_ID_SQL = "select cid from Rental where mid = ? and status = 'open'";
@@ -100,6 +100,12 @@ public class Query {
 	
 	private static final String SUB_ID_SQL = "select sid from customer where cid = ?";
 	private PreparedStatement subIdFromCid;
+	
+	private static final String MY_RENTED_SQL = "select mid from Rental where cid = ? and status = 'open'";
+	private PreparedStatement rentedMids;
+	
+	private static final String RETURN_MOV_SQL = "update Rental set status='closed' WHERE mid = ? and cid=? and status='open'";
+	private PreparedStatement returnUpdate;
 	
 	/* uncomment, and edit, after your create your own customer database */
 	
@@ -188,6 +194,8 @@ public class Query {
 		newTuple = customerConn.prepareStatement(NEW_RENTAL_SQL);
 		renterId = customerConn.prepareStatement(RENTER_ID_SQL);
 		subIdFromCid = customerConn.prepareStatement(SUB_ID_SQL);
+		rentedMids = customerConn.prepareStatement(MY_RENTED_SQL);
+		returnUpdate = customerConn.prepareStatement(RETURN_MOV_SQL);
 
 		/* uncomment after you create your customers database */
 		
@@ -425,6 +433,26 @@ public class Query {
 
 	public void transaction_return(int cid, int mid) throws Exception {
 	    /* return the movie mid by the customer cid */
+		beginTransaction();
+		rentedMids.clearParameters();
+		rentedMids.setInt(1, cid);
+		ResultSet rentedSet = rentedMids.executeQuery();
+		boolean inRented = false;
+		while(rentedSet.next()){
+			if(rentedSet.getInt(1) == mid){
+				inRented = true;
+				returnUpdate.clearParameters();
+				returnUpdate.setInt(1, mid);
+				returnUpdate.setInt(2, cid);
+				returnUpdate.execute();
+				commitTransaction();
+			}
+		} 
+		if(!inRented){
+			rollbackTransaction();
+			System.out.println("You are not currently renting this movie.");
+		}
+		rentedSet.close();
 	}
 
 	public void transaction_fastSearch(int cid, String movie_title)
