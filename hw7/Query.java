@@ -74,9 +74,11 @@ public class Query {
 			  "(select count(*) as checkedOut from Rental " +
 			  "where status = 'open' " +
 			  "and cid = ?) as r " +
-			"where  c.cid = s.cid " +
+			"where  c.sid = s.sid " +
 			"and c.cid = ?";
 	private PreparedStatement customerInfo;
+	
+	private static final String ALL_PLANS_SQL = "select * from Subscription";
 	
 	/* uncomment, and edit, after your create your own customer database */
 	
@@ -268,7 +270,7 @@ public class Query {
 			getActorsForMovies.setString(1, movie_set.getString(2));
 			ResultSet actor_set = getActorsForMovies.executeQuery();
 			while(actor_set.next()){
-				System.out.println("\t\tActor: " + actor_set.getString(2) + ", " + actor_set.getString(1));
+				System.out.println("\t\tActor: " + actor_set.getString(2) + ", " + actor_set.getString(3));
 			}
 			actor_set.close();
 			alreadyRented.clearParameters();
@@ -293,6 +295,12 @@ public class Query {
 
 	public void transaction_listPlans() throws Exception {
 	    /* println all available plans: SELECT * FROM plan */
+		Statement plans = customerConn.createStatement();
+		ResultSet allPlans = plans.executeQuery(ALL_PLANS_SQL);
+		while(allPlans.next()){
+			System.out.println("Plan Id: " + allPlans.getInt(1) + "\tPlan Name: " + allPlans.getString(2) + 
+					" \tMaximum Rentals: " + allPlans.getInt(3) + "\tMonthly Price: " + allPlans.getFloat(4));
+		}
 	}
 
 	public void transaction_rent(int cid, int mid) throws Exception {
