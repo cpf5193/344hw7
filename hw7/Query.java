@@ -90,6 +90,14 @@ public class Query {
 	private static final String MAX_RENTALS_SQL = "select maxnum from Subscription where sid = ?";
 	private PreparedStatement maxRentals;
 	
+	private static final String ALL_RENTALS_SQL = "select id from Movie";
+	
+	private static final String NEW_RENTAL_SQL = "INSERT into Rental values(?, ?, 'open', GETDATE())";
+	private PreparedStatement newTuple;
+	
+	private static final String RENTER_ID_SQL = "select cid from Rental where mid = ?";
+	private PreparedStatement renterId;
+	
 	/* uncomment, and edit, after your create your own customer database */
 	
 	private static final String CUSTOMER_LOGIN_SQL = 
@@ -174,6 +182,8 @@ public class Query {
 		updateSid = customerConn.prepareStatement(UPDATE_SID_SQL);
 		numRentals = customerConn.prepareStatement(CURRENT_RENTALS_SQL);
 		maxRentals = customerConn.prepareStatement(MAX_RENTALS_SQL);
+		newTuple = customerConn.prepareStatement(NEW_RENTAL_SQL);
+		renterId = customerConn.prepareStatement(RENTER_ID_SQL);
 
 		/* uncomment after you create your customers database */
 		
@@ -210,20 +220,40 @@ public class Query {
 		ResultSet subscriptionIds = ids.executeQuery(SUB_IDS_SQL);
 		while(subscriptionIds.next()){
 			if (planid ==subscriptionIds.getInt(1)){
+				subscriptionIds.close();
 				return true;
 			}
 		}
+		subscriptionIds.close();
 		return false;
 	}
 
 	public boolean isValidMovie(int mid) throws Exception {
-		/* is mid a valid movie ID?  You have to figure it out */
-		return true;
+		Statement validMovie = conn.createStatement();
+		ResultSet movieIds = validMovie.executeQuery(ALL_RENTALS_SQL);
+		while(movieIds.next()){
+			if(movieIds.getInt(1) == mid){
+				movieIds.close();
+				return true;
+			}
+		}
+		movieIds.close();
+		return false;
 	}
-
+	
 	private int getRenterID(int mid) throws Exception {
 		/* Find the customer id (cid) of whoever currently rents the movie mid; return -1 if none */
-		return (77);
+		renterId.clearParameters();
+		renterId.setInt(1, mid);
+		ResultSet result = renterId.executeQuery();
+		if(result.next()){
+			result.close();
+			return result.getInt(1);
+		}
+		else{ 
+			result.close();
+			return -1;
+		}
 	}
 
     /**********************************************************/
@@ -254,6 +284,7 @@ public class Query {
 		cust_info_set.next();
 		System.out.println("Hello, " + cust_info_set.getString(1) + 
 				"! You have " + cust_info_set.getInt(3) + " out of " + cust_info_set.getInt(2) + " rentals remaining.");
+		cust_info_set.close();
 	}
 
 
@@ -325,6 +356,8 @@ public class Query {
 		max.next();
 		int maxMovs = max.getInt(1);
 		int numMovs = num.getInt(1);
+		num.close();
+		max.close();
 		String movs = " Movie";
 		if(numMovs - maxMovs != 1)
 			movs += "s";
@@ -344,11 +377,30 @@ public class Query {
 			System.out.println("Plan Id: " + allPlans.getInt(1) + "\tPlan Name: " + allPlans.getString(2) + 
 					" \tMaximum Rentals: " + allPlans.getInt(3) + "\tMonthly Price: " + allPlans.getFloat(4));
 		}
+		allPlans.close();
 	}
 
 	public void transaction_rent(int cid, int mid) throws Exception {
 	    /* rent the movie mid to the customer cid */
 	    /* remember to enforce consistency ! */
+		beginTransaction();
+		int renterId = getRenterID(mid);
+		if(renterId == cid){
+			rollbackTransaction();
+			System.out.println("You are already renting this movie.");
+		} else if(renterId != -1){
+			rollbackTransaction();
+			System.out.println("Sorry, this movie has been rented by another person.");
+		} else if(isValidMovie(mid)){
+			newTuple.clearParameters();
+			newTuple.setInt(1, mid);
+			newTuple.setInt(2, cid);
+			newTuple.execute();
+			commitTransaction();
+		} else{
+			rollbackTransaction();
+			System.out.println("Not a valid movie id");
+		}
 	}
 
 	public void transaction_return(int cid, int mid) throws Exception {
