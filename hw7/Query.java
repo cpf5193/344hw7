@@ -79,6 +79,7 @@ public class Query {
 	private PreparedStatement customerInfo;
 	
 	private static final String ALL_PLANS_SQL = "select * from Subscription";
+	private static final String SUB_IDS_SQL = "select sid from Subscription";
 	
 	/* uncomment, and edit, after your create your own customer database */
 	
@@ -193,8 +194,14 @@ public class Query {
 	}
 
 	public boolean isValidPlan(int planid) throws Exception {
-		/* Is planid a valid plan ID?  You have to figure it out */
-		return true;
+		Statement ids = customerConn.createStatement();
+		ResultSet subscriptionIds = ids.executeQuery(SUB_IDS_SQL);
+		while(subscriptionIds.next()){
+			if (planid ==subscriptionIds.getInt(1)){
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public boolean isValidMovie(int mid) throws Exception {
